@@ -1,4 +1,4 @@
-# Logs Parser Bot v10.0.1
+# Logs Parser Bot v5.8.1
 
 Discord Bot for SCUM Game Server Monitoring with Log Parsing and Memory Management
 
