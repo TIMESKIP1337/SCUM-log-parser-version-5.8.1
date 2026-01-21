@@ -33,15 +33,15 @@ Use `/setup-logs` command to automatically create channels (Admin only) and then
 
 ```
 Logs-version-8.0.0/
-├── cmd/logs-bot/              # New entry point (Clean Architecture)
+├── cmd/logs-bot/              # New entry point
 │   └── main.go
 ├── internal/                  # Refactored packages
 │   ├── config/               # Configuration management
 │   ├── shared/               # Common utilities
 │   ├── infrastructure/       # External systems (cache, batch, memory, remote)
-│   └── domain/              # Business logic (parser, discord)
-├── main.go                   # Original entry point (legacy)
-├── *.go                      # Original modules (21 files)
+│   └── domain/            
+├── main.go                   # Original entry point 
+├── *.go                      # Original modules 
 ├── go.mod
 └── .env
 ```
