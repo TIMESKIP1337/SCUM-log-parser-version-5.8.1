@@ -102,7 +102,7 @@ TICKET_CHANNEL_ID=1234567890
 LOCAL_LOGS_PATH=./logs/
 ENABLE_FILE_WATCHER=true
 
-# Remote Configuration (Optional)
+# Remote Configuration (Optional) เปลื่ยนเป็น FTP / SFTP 
 PROTOCOL=SFTP
 FTP_HOST=example.com
 FTP_PORT=22
