@@ -4,6 +4,8 @@ Discord Bot for SCUM Game Server Monitoring with Log Parsing and Memory Manageme
 
 Discord Bot สำหรับ SCUM Game Server Monitoring พร้อมระบบ Log Parsing และ Memory Management
 
+มีแถมพวกระบบ Ticket, show / hide discord channels และก็ ระบบ คนเข้าออกดิสคอร์ดงับ 
+
 ---
 
 ## Quick Start / เริ่มต้นใช้งาน
