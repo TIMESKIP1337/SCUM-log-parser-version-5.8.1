@@ -8,9 +8,9 @@ Discord Bot สำหรับ SCUM Game Server Monitoring พร้อมระ
 
 ## Quick Start / เริ่มต้นใช้งาน
 
-Use `/setup-logs` command to automatically create channels (Admin only)
+Use `/setup-logs` command to automatically create channels (Admin only) and then restart the bot 
 
-ใช้คำสั่ง `/setup-logs` สำหรับสร้าง channel แบบอัตโนมัติ (เฉพาะ Admin)
+ใช้คำสั่ง `/setup-logs` สำหรับสร้าง channel แบบอัตโนมัติ (เฉพาะ Admin) หลังจากนั้นรีบอทด้วยครับ
 
 ---
 
