@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(go build:*)",
+      "Bash(del \"C:\\Users\\TIMESKIP\\Desktop\\TIMESKIP Discord-bot version 8.1.0\\Log parser\\sent_logs_cache.json\")",
+      "Bash(del /f \"C:\\Users\\TIMESKIP\\Desktop\\TIMESKIP Discord-bot version 8.1.0\\Log parser\\sent_logs_cache.json\")",
+      "Bash(find:*)",
+      "Bash(grep:*)",
+      "Bash(dir \"C:\\Users\\TIMESKIP\\Desktop\\TIMESKIP Discord-bot version 8.1.0\\Log parser\\internal\\app\\*.go\" /b)",
+      "Bash(dir:*)",
+      "Bash(ls:*)",
+      "Bash(git init:*)",
+      "Bash(git remote add:*)",
+      "Bash(git add:*)",
+      "Bash(git branch:*)",
+      "Bash(git push:*)"
+    ]
+  }
+}

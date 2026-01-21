@@ -1,0 +1,31 @@
+module github.com/TIMESKIP1337/Logs-version-8.0.0
+
+go 1.24.4
+
+require (
+	github.com/bwmarrin/discordgo v0.28.1
+	github.com/fsnotify/fsnotify v1.7.0
+	github.com/jlaffaye/ftp v0.2.0
+	github.com/joho/godotenv v1.5.1
+	github.com/pkg/sftp v1.13.6
+	golang.org/x/crypto v0.17.0
+	golang.org/x/sys v0.33.0
+	golang.org/x/text v0.14.0
+	modernc.org/sqlite v1.38.0
+)
+
+require (
+	github.com/dustin/go-humanize v1.0.1 // indirect
+	github.com/google/uuid v1.6.0 // indirect
+	github.com/gorilla/websocket v1.4.2 // indirect
+	github.com/hashicorp/errwrap v1.0.0 // indirect
+	github.com/hashicorp/go-multierror v1.1.1 // indirect
+	github.com/kr/fs v0.1.0 // indirect
+	github.com/mattn/go-isatty v0.0.20 // indirect
+	github.com/ncruces/go-strftime v0.1.9 // indirect
+	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
+	golang.org/x/exp v0.0.0-20250408133849-7e4ce0ab07d0 // indirect
+	modernc.org/libc v1.65.10 // indirect
+	modernc.org/mathutil v1.7.1 // indirect
+	modernc.org/memory v1.11.0 // indirect
+)

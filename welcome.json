@@ -1,0 +1,21 @@
+{
+  "welcome_channel_id": "1430240727740186705",
+  "goodbye_channel_id": "1430240746878931037",
+  "image_url": "https://cdn.discordapp.com/attachments/1347264410087067709/1364553843316363304/raw.png",
+  "footer_icon_url": "https://cdn.discordapp.com/attachments/1347264410087067709/1364554397396504676/747d0b2e-5215-4c38-9f88-43ee15f40733-removebg-preview.png",
+  
+  "welcome_title": "Welcome",
+  "welcome_description": "สวัสดีจ้ااา! ยินดีต้อนรับเข้าสู่เซิร์ฟเวอร์ SUPER HUMAN 🥰",
+  "welcome_message": "ยินดีต้อนรับ {mention} เข้าสู่เซิร์ฟเวอร์ SUPER HUMAN!",
+  "welcome_color": "random",
+  
+  "goodbye_title": "Goodbye",
+  "goodbye_description": "ถ้ามีโอกาสหน้าเอาไว้เจอกันใหม่นะครับ 🥰",
+  "goodbye_message": "{mention} ได้ออกจากเซิร์ฟเวอร์แล้ว!",
+  "goodbye_color": 16711680,
+  
+  "created_at_label": "📅 สร้างบัญชีเมื่อ",
+  "joined_at_label": "🗓️ เข้าดิสเมื่อ",
+  "user_label": "ผู้ใช้",
+  "footer_text": "© powered by TimeSkip"
+}
