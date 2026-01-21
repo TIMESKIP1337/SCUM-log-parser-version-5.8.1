@@ -50,6 +50,8 @@ Logs-version-8.0.0/
 
 ## How to Run / วิธีการรัน
 
+แนะนำใช้ build.bat บีบไฟล์ให้เล็กแต่อาจจะโดน anti virus flag ได้นะงับ
+
 ### Option 1: New Structure (Recommended) / โครงสร้างใหม่ (แนะนำ)
 
 ```bash
