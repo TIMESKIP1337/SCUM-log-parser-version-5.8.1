@@ -1,0 +1,6 @@
+nul
+*.exe
+*.log
+sent_logs_cache.json
+.env
+.claude
