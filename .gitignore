@@ -4,3 +4,4 @@ nul
 sent_logs_cache.json
 .env
 .claude
+database/
