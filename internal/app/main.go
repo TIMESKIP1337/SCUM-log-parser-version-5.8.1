@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"path"
 	"runtime"
 	"runtime/debug"
 	"strconv"
@@ -68,6 +69,7 @@ type SharedConfig struct {
 
 	// Players Online module
 	PlayersOnlineChannelID     string
+	ScumServerRoot             string // Root path e.g. /15.235.230.231_7010 — auto-detects sub-paths
 	ScumLogPath                string
 	ScumDBPath                 string
 	ScumLoginLogDir            string
@@ -166,6 +168,7 @@ func init() {
 
 		// Players Online module
 		PlayersOnlineChannelID:     getEnv("PLAYERS_ONLINE_CHANNEL_ID", ""),
+		ScumServerRoot:             getEnv("SCUM_SERVER_ROOT", ""),
 		ScumLogPath:                getEnv("SCUM_LOG_PATH", ""),
 		ScumDBPath:                 getEnv("SCUM_DB_PATH", ""),
 		ScumLoginLogDir:            getEnv("SCUM_LOGIN_LOG_DIR", ""),
@@ -195,6 +198,9 @@ func init() {
 
 	// Initialize remote connections (will set UseRemote and ConnectionType)
 	InitializeRemoteConnections()
+
+	// Auto-detect SCUM paths from SCUM_SERVER_ROOT if needed
+	resolveScumPaths()
 
 	// Validate configuration
 	if Config.DiscordToken == "" {
@@ -330,6 +336,72 @@ func getEnvBool(key string, defaultValue bool) bool {
 		return strings.ToLower(value) == "true"
 	}
 	return defaultValue
+}
+
+// resolveScumPaths auto-detects SCUM paths from SCUM_SERVER_ROOT
+// Priority: individual env vars > SCUM_SERVER_ROOT auto-detect
+func resolveScumPaths() {
+	// If all 3 paths are already set, nothing to do
+	if Config.ScumLogPath != "" && Config.ScumDBPath != "" && Config.ScumLoginLogDir != "" {
+		return
+	}
+
+	root := Config.ScumServerRoot
+	if root == "" {
+		return // No root configured, skip auto-detect
+	}
+
+	if !Config.UseRemote {
+		log.Printf("⚠️ [SCUM PATH] SCUM_SERVER_ROOT is set but no remote connection configured")
+		return
+	}
+
+	log.Printf("🔍 [SCUM PATH] Auto-detecting paths from SCUM_SERVER_ROOT: %s", root)
+
+	// Probe known directory structures (order: most specific → least specific)
+	// Pattern 1: /{root}/SCUM/Saved/Logs + SaveFiles  (standard)
+	// Pattern 2: /{root}/Saved/Logs + SaveFiles        (no SCUM/ prefix)
+	// Pattern 3: /{root}/Logs + SaveFiles              (gghost — flat structure)
+	type pathLayout struct {
+		name     string
+		logsDir  string // directory containing SCUM.log
+		saveDir  string // directory containing SCUM.db and Logs/
+	}
+
+	candidates := []pathLayout{
+		{"SCUM/Saved", path.Join(root, "SCUM/Saved/Logs"), path.Join(root, "SCUM/Saved/SaveFiles")},
+		{"Saved", path.Join(root, "Saved/Logs"), path.Join(root, "Saved/SaveFiles")},
+		{"flat (gghost)", path.Join(root, "Logs"), path.Join(root, "SaveFiles")},
+	}
+
+	var matched *pathLayout
+	for i, c := range candidates {
+		if CheckRemoteDirExists(c.logsDir) && CheckRemoteDirExists(c.saveDir) {
+			matched = &candidates[i]
+			log.Printf("✅ [SCUM PATH] Found layout: %s", c.name)
+			break
+		}
+	}
+
+	if matched == nil {
+		log.Printf("⚠️ [SCUM PATH] Could not find SCUM directory structure under %s", root)
+		log.Printf("   Tried: SCUM/Saved, Saved, and flat (Logs+SaveFiles)")
+		return
+	}
+
+	// Fill in any paths that aren't already set
+	if Config.ScumLogPath == "" {
+		Config.ScumLogPath = path.Join(matched.logsDir, "SCUM.log")
+		log.Printf("   → SCUM.log: %s", Config.ScumLogPath)
+	}
+	if Config.ScumDBPath == "" {
+		Config.ScumDBPath = path.Join(matched.saveDir, "SCUM.db")
+		log.Printf("   → SCUM.db: %s", Config.ScumDBPath)
+	}
+	if Config.ScumLoginLogDir == "" {
+		Config.ScumLoginLogDir = path.Join(matched.saveDir, "Logs")
+		log.Printf("   → Login Logs: %s", Config.ScumLoginLogDir)
+	}
 }
 
 // Module activity check functions

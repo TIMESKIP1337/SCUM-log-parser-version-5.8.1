@@ -453,6 +453,35 @@ func TestRemoteConnection() error {
 	}
 }
 
+// CheckRemoteDirExists checks if a remote directory exists via FTP or SFTP
+func CheckRemoteDirExists(remotePath string) bool {
+	if !Config.UseRemote {
+		return false
+	}
+
+	switch Config.ConnectionType {
+	case "FTP":
+		conn, release, err := GetMultiFTPConnection()
+		if err != nil {
+			return false
+		}
+		defer release()
+		_, err = conn.List(remotePath)
+		return err == nil
+
+	case "SFTP":
+		conn, release, err := GetMultiSFTPConnection()
+		if err != nil {
+			return false
+		}
+		defer release()
+		info, err := conn.Stat(remotePath)
+		return err == nil && info.IsDir()
+	}
+
+	return false
+}
+
 // NeedsDownload checks if a file needs to be downloaded
 func NeedsDownload(remotePath, localPath string, remoteFile *RemoteFileInfo) bool {
 	localInfo, err := os.Stat(localPath)
