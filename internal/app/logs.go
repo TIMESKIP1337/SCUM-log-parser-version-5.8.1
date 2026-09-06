@@ -711,23 +711,50 @@ func sendEconomyLog(data *EconomyLog) error {
 		totalTransactions += item.TransactionCount
 	}
 
-	var msg string
+	var header string
 	if data.TradeType == "Purchase" {
-		msg = fmt.Sprintf("```\n%s [%s] - PURCHASED\nTotal Items: %d\nTrader: %s\n\nItem - Quantity - Transactions - Money Spent\n",
+		header = fmt.Sprintf("%s [%s] - PURCHASED\nTotal Items: %d\nTrader: %s\n\nItem - Quantity - Transactions - Money Spent\n",
 			data.Seller, data.SellerSteamID, totalItems, data.Buyer)
 	} else {
-		msg = fmt.Sprintf("```\n%s [%s] - SOLD\nTotal Items Sold: %d\nTrader: %s\n\nItem - Quantity - Transactions - Money Received\n",
+		header = fmt.Sprintf("%s [%s] - SOLD\nTotal Items Sold: %d\nTrader: %s\n\nItem - Quantity - Transactions - Money Received\n",
 			data.Seller, data.SellerSteamID, totalItems, data.Buyer)
 	}
 
-	for itemName, details := range data.Items {
-		msg += fmt.Sprintf("%s (x%d) for %d\n", itemName, details.Quantity, details.TotalPrice)
-	}
-	msg += "```"
+	// Discord caps a message at 2000 chars. Reserve room for the ```\n ... \n``` wrapper.
+	const discordLimit = 1900
+	const wrapperOverhead = 10 // ```\n + \n```
 
-	_, err := SharedSession.ChannelMessageSend(Config.EconomyChannelID, msg)
-	if err != nil {
-		log.Printf("ERROR: Failed to send economy log to Discord: %v", err)
+	itemLines := make([]string, 0, len(data.Items))
+	for itemName, details := range data.Items {
+		itemLines = append(itemLines, fmt.Sprintf("%s (x%d) for %d\n", itemName, details.Quantity, details.TotalPrice))
+	}
+
+	// Build chunks. First chunk includes the header; subsequent chunks are continuations.
+	send := func(body string) error {
+		msg := "```\n" + body + "```"
+		_, err := SharedSession.ChannelMessageSend(Config.EconomyChannelID, msg)
+		if err != nil {
+			log.Printf("ERROR: Failed to send economy log to Discord: %v", err)
+		}
+		return err
+	}
+
+	currentBody := header
+	currentLen := len(header) + wrapperOverhead
+	chunkIdx := 1
+	for _, line := range itemLines {
+		if currentLen+len(line) > discordLimit && currentBody != header {
+			if err := send(currentBody); err != nil {
+				return err
+			}
+			chunkIdx++
+			currentBody = fmt.Sprintf("(continued — part %d)\n", chunkIdx)
+			currentLen = len(currentBody) + wrapperOverhead
+		}
+		currentBody += line
+		currentLen += len(line)
+	}
+	if err := send(currentBody); err != nil {
 		return err
 	}
 

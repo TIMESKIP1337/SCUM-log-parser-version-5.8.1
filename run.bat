@@ -2,6 +2,9 @@
 title scumbot_logs Auto Restart
 color 0A
 
+REM Allow X.509 certs with negative serial number (some FTPS hosts use self-signed certs that violate RFC 5280)
+set GODEBUG=x509negativeserial=1
+
 :start
 cls
 echo ===============================================

@@ -112,10 +112,13 @@ func (p *MultiFTPPool) createConnection(id int) (*PooledFTPConnection, error) {
 	var err error
 	var useTLS bool
 
+	// Per-connection TLS session cache: required so the FTPS data connection
+	// can resume the control connection's TLS session (vsftpd's require_ssl_reuse).
 	tlsConfig := &tls.Config{
 		InsecureSkipVerify: true,
 		ServerName:         Config.FTPHost,
 		MinVersion:         tls.VersionTLS12,
+		ClientSessionCache: tls.NewLRUClientSessionCache(4),
 	}
 
 	if forceTLS {
@@ -319,10 +322,12 @@ func (p *MultiFTPPool) recreateConnection(pooledConn *PooledFTPConnection) {
 	var err error
 	var useTLS bool
 
+	// Per-connection TLS session cache (FTPS data connection session resumption)
 	tlsConfig := &tls.Config{
 		InsecureSkipVerify: true,
 		ServerName:         Config.FTPHost,
 		MinVersion:         tls.VersionTLS12,
+		ClientSessionCache: tls.NewLRUClientSessionCache(4),
 	}
 
 	if forceTLS {

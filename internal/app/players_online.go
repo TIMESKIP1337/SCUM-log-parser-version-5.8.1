@@ -16,6 +16,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/jlaffaye/ftp"
 	_ "modernc.org/sqlite"
 	"golang.org/x/text/encoding/unicode"
 	"golang.org/x/text/transform"
@@ -208,7 +209,95 @@ func poUpdateFakeOffset() int {
 }
 
 // ============================================================
-// SFTP: Read SCUM.log
+// Remote IO helpers (protocol-agnostic: FTP or SFTP)
+// ============================================================
+
+// poRemoteDirEntry is a minimal directory entry used by Players Online module
+type poRemoteDirEntry struct {
+	Name  string
+	IsDir bool
+}
+
+// poReadRemoteFile reads an entire remote file via FTP or SFTP based on ConnectionType
+func poReadRemoteFile(remotePath string) ([]byte, error) {
+	switch Config.ConnectionType {
+	case "FTP":
+		conn, release, err := GetMultiFTPConnection()
+		if err != nil {
+			return nil, fmt.Errorf("FTP connection failed: %w", err)
+		}
+		defer release()
+		resp, err := conn.Retr(remotePath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to open remote file: %w", err)
+		}
+		defer resp.Close()
+		return io.ReadAll(resp)
+
+	case "SFTP":
+		sftpClient, err := GetSFTPConnection()
+		if err != nil {
+			return nil, fmt.Errorf("SFTP connection failed: %w", err)
+		}
+		file, err := sftpClient.Open(remotePath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to open remote file: %w", err)
+		}
+		defer file.Close()
+		return io.ReadAll(file)
+
+	default:
+		return nil, fmt.Errorf("no remote connection configured")
+	}
+}
+
+// poListRemoteDir lists a remote directory via FTP or SFTP
+func poListRemoteDir(remotePath string) ([]poRemoteDirEntry, error) {
+	switch Config.ConnectionType {
+	case "FTP":
+		conn, release, err := GetMultiFTPConnection()
+		if err != nil {
+			return nil, fmt.Errorf("FTP connection failed: %w", err)
+		}
+		defer release()
+		entries, err := conn.List(remotePath)
+		if err != nil {
+			return nil, err
+		}
+		result := make([]poRemoteDirEntry, 0, len(entries))
+		for _, e := range entries {
+			result = append(result, poRemoteDirEntry{
+				Name:  e.Name,
+				IsDir: e.Type == ftp.EntryTypeFolder,
+			})
+		}
+		return result, nil
+
+	case "SFTP":
+		sftpClient, err := GetSFTPConnection()
+		if err != nil {
+			return nil, fmt.Errorf("SFTP connection failed: %w", err)
+		}
+		infos, err := sftpClient.ReadDir(remotePath)
+		if err != nil {
+			return nil, err
+		}
+		result := make([]poRemoteDirEntry, 0, len(infos))
+		for _, info := range infos {
+			result = append(result, poRemoteDirEntry{
+				Name:  info.Name(),
+				IsDir: info.IsDir(),
+			})
+		}
+		return result, nil
+
+	default:
+		return nil, fmt.Errorf("no remote connection configured")
+	}
+}
+
+// ============================================================
+// Read SCUM.log
 // ============================================================
 
 func poReadScumLogViaSFTP() (string, error) {
@@ -216,18 +305,7 @@ func poReadScumLogViaSFTP() (string, error) {
 		return "", fmt.Errorf("SCUM_LOG_PATH not configured")
 	}
 
-	sftp, err := GetSFTPConnection()
-	if err != nil {
-		return "", fmt.Errorf("SFTP connection failed: %w", err)
-	}
-
-	file, err := sftp.Open(Config.ScumLogPath)
-	if err != nil {
-		return "", fmt.Errorf("failed to open SCUM.log: %w", err)
-	}
-	defer file.Close()
-
-	data, err := io.ReadAll(file)
+	data, err := poReadRemoteFile(Config.ScumLogPath)
 	if err != nil {
 		return "", fmt.Errorf("failed to read SCUM.log: %w", err)
 	}
@@ -237,7 +315,7 @@ func poReadScumLogViaSFTP() (string, error) {
 }
 
 // ============================================================
-// SFTP: Server Start Time from login_*.log filename
+// Server Start Time from login_*.log filename
 // ============================================================
 
 // poDetectServerStartTime finds the latest login_*.log and extracts server start time
@@ -246,13 +324,7 @@ func poDetectServerStartTime() (*time.Time, string) {
 		return nil, ""
 	}
 
-	sftp, err := GetSFTPConnection()
-	if err != nil {
-		log.Printf("⚠️ [PLAYERS ONLINE] SFTP failed for server start detection: %v", err)
-		return nil, ""
-	}
-
-	files, err := sftp.ReadDir(Config.ScumLoginLogDir)
+	files, err := poListRemoteDir(Config.ScumLoginLogDir)
 	if err != nil {
 		log.Printf("⚠️ [PLAYERS ONLINE] Failed to list login log dir: %v", err)
 		return nil, ""
@@ -261,7 +333,7 @@ func poDetectServerStartTime() (*time.Time, string) {
 	// Filter and sort login_*.log files
 	var loginLogs []string
 	for _, f := range files {
-		name := f.Name()
+		name := f.Name
 		if strings.Contains(strings.ToLower(name), "login_") && strings.HasSuffix(name, ".log") {
 			loginLogs = append(loginLogs, name)
 		}
@@ -296,7 +368,7 @@ func poDetectServerStartTime() (*time.Time, string) {
 }
 
 // ============================================================
-// SFTP: Read login_*.log (primary, most accurate source)
+// Read login_*.log (primary, most accurate source)
 // ============================================================
 
 // poReadLoginLogPlayers reads the latest login_*.log file and returns online players
@@ -305,14 +377,8 @@ func poReadLoginLogPlayers() []OnlinePlayer {
 		return nil
 	}
 
-	sftp, err := GetSFTPConnection()
-	if err != nil {
-		log.Printf("⚠️ [PLAYERS ONLINE] SFTP failed for login log: %v", err)
-		return nil
-	}
-
 	// Find latest login_*.log
-	files, err := sftp.ReadDir(Config.ScumLoginLogDir)
+	files, err := poListRemoteDir(Config.ScumLoginLogDir)
 	if err != nil {
 		log.Printf("⚠️ [PLAYERS ONLINE] Failed to list login log dir: %v", err)
 		return nil
@@ -320,7 +386,7 @@ func poReadLoginLogPlayers() []OnlinePlayer {
 
 	var loginLogs []string
 	for _, f := range files {
-		name := f.Name()
+		name := f.Name
 		if strings.Contains(strings.ToLower(name), "login_") && strings.HasSuffix(name, ".log") {
 			loginLogs = append(loginLogs, name)
 		}
@@ -335,16 +401,9 @@ func poReadLoginLogPlayers() []OnlinePlayer {
 	logPath := Config.ScumLoginLogDir + "/" + latestLog
 
 	// Read file
-	file, err := sftp.Open(logPath)
+	data, err := poReadRemoteFile(logPath)
 	if err != nil {
-		log.Printf("⚠️ [PLAYERS ONLINE] Failed to open login log %s: %v", logPath, err)
-		return nil
-	}
-	defer file.Close()
-
-	data, err := io.ReadAll(file)
-	if err != nil {
-		log.Printf("⚠️ [PLAYERS ONLINE] Failed to read login log: %v", err)
+		log.Printf("⚠️ [PLAYERS ONLINE] Failed to read login log %s: %v", logPath, err)
 		return nil
 	}
 
@@ -420,7 +479,7 @@ func poReadLoginLogPlayers() []OnlinePlayer {
 }
 
 // ============================================================
-// SFTP: Download SCUM.db
+// Download SCUM.db
 // ============================================================
 
 func poDownloadScumDB() error {
@@ -428,30 +487,14 @@ func poDownloadScumDB() error {
 		return fmt.Errorf("SCUM_DB_PATH not configured")
 	}
 
-	sftp, err := GetSFTPConnection()
-	if err != nil {
-		return fmt.Errorf("SFTP connection failed: %w", err)
-	}
-
-	remoteFile, err := sftp.Open(Config.ScumDBPath)
-	if err != nil {
-		return fmt.Errorf("failed to open remote SCUM.db: %w", err)
-	}
-	defer remoteFile.Close()
-
-	localFile, err := os.Create(poLocalDBFile)
-	if err != nil {
-		return fmt.Errorf("failed to create local SCUM.db: %w", err)
-	}
-	defer localFile.Close()
-
-	written, err := io.Copy(localFile, remoteFile)
-	if err != nil {
+	if err := DownloadFileRemote(Config.ScumDBPath, poLocalDBFile, 3); err != nil {
 		os.Remove(poLocalDBFile)
 		return fmt.Errorf("failed to download SCUM.db: %w", err)
 	}
 
-	log.Printf("👥 Downloaded SCUM.db (%d bytes)", written)
+	if info, err := os.Stat(poLocalDBFile); err == nil {
+		log.Printf("👥 Downloaded SCUM.db (%d bytes)", info.Size())
+	}
 	return nil
 }
 

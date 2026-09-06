@@ -48,7 +48,28 @@ var (
 			return &batch
 		},
 	}
+
+	pendingKillLogs    = make(map[string]struct{})
+	pendingKillLogsMux sync.Mutex
 )
+
+func reserveKillLog(logKey string) bool {
+	pendingKillLogsMux.Lock()
+	defer pendingKillLogsMux.Unlock()
+
+	if _, exists := pendingKillLogs[logKey]; exists {
+		return false
+	}
+
+	pendingKillLogs[logKey] = struct{}{}
+	return true
+}
+
+func releaseKillLog(logKey string) {
+	pendingKillLogsMux.Lock()
+	delete(pendingKillLogs, logKey)
+	pendingKillLogsMux.Unlock()
+}
 
 // GetStringBuffer gets a reusable string buffer
 func GetStringBuffer() *[]byte {
@@ -419,25 +440,29 @@ func OptimizedProcessKillLines(lines []string) {
 			normalizedLine := strings.TrimSpace(lines[j])
 			logKey := normalizedLine + "_killfeed"
 
-			if !IsLogSentCached(logKey) {
+			if !IsLogSentCached(logKey) && reserveKillLog(logKey) {
 				// Use pooled parser
 				killInfo := OptimizedParseKillLog(normalizedLine)
 				if killInfo != nil {
 					// Process with goroutine limit
 					GlobalResourceManager.AcquireGoroutine()
-					go func(info *KillInfo) {
+					go func(info *KillInfo, key string) {
 						defer GlobalResourceManager.ReleaseGoroutine()
 						defer PutKillInfo(info) // Return to pool
+						defer releaseKillLog(key)
 
 						if err := sendKillLog(info); err != nil {
 							log.Printf("Error sending kill log: %v", err)
+							return
 						}
-					}(killInfo)
 
-					MarkLogAsSentCached(logKey)
+						MarkLogAsSentCached(key)
+					}(killInfo, logKey)
 					newLogs = true
 					processedCount++
 					batchProcessed++
+				} else {
+					releaseKillLog(logKey)
 				}
 			}
 		}
@@ -542,7 +567,7 @@ func processKillFeedChunk(lines []string, chunkIndex int) int {
 		normalizedLine := strings.TrimSpace(line)
 		logKey := normalizedLine + "_killfeed"
 
-		if !IsLogSentCached(logKey) {
+		if !IsLogSentCached(logKey) && reserveKillLog(logKey) {
 			killInfo := OptimizedParseKillLog(normalizedLine)
 			if killInfo != nil {
 				// ส่งข้อมูลทันที
@@ -555,6 +580,9 @@ func processKillFeedChunk(lines []string, chunkIndex int) int {
 
 				// คืนอ็อบเจ็กต์กลับ pool
 				PutKillInfo(killInfo)
+				releaseKillLog(logKey)
+			} else {
+				releaseKillLog(logKey)
 			}
 		}
 	}

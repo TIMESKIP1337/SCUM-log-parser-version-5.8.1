@@ -42,7 +42,46 @@ var (
 	// Weapon name cleaning
 	weaponClassRegex *regexp.Regexp
 	killFeedConfig   KillFeedConfig
+
+	killFeedSendLimiter     chan struct{}
+	killFeedSendLimiterOnce sync.Once
 )
+
+func acquireKillFeedSendSlot() func() {
+	killFeedSendLimiterOnce.Do(func() {
+		concurrency := getEnvInt("KILLFEED_SEND_CONCURRENCY", 2)
+		if concurrency < 1 {
+			concurrency = 1
+		}
+		killFeedSendLimiter = make(chan struct{}, concurrency)
+		log.Printf("✅ Killfeed Discord send concurrency limited to %d", concurrency)
+	})
+
+	killFeedSendLimiter <- struct{}{}
+	return func() {
+		<-killFeedSendLimiter
+	}
+}
+
+func resetMessageFileReaders(messageData *discordgo.MessageSend) {
+	if messageData == nil {
+		return
+	}
+
+	for _, file := range messageData.Files {
+		if file == nil || file.Reader == nil {
+			continue
+		}
+
+		if seeker, ok := file.Reader.(interface {
+			Seek(offset int64, whence int) (int64, error)
+		}); ok {
+			if _, err := seeker.Seek(0, 0); err != nil {
+				log.Printf("Warning: could not reset attachment reader %s: %v", file.Name, err)
+			}
+		}
+	}
+}
 
 // KillFeedConfig holds configuration for kill feed
 type KillFeedConfig struct {
@@ -602,11 +641,11 @@ func isValidKillFile(filename string) bool {
 
 // Cache for kill feed file info to reduce SFTP calls
 var (
-	lastKillFileInfo    *RemoteFileInfo
-	lastKillFilePath    string
-	lastKillFileCheck   time.Time
-	killFileCacheTTL    = 2 * time.Second // Reduced from 5s to 2s for faster detection
-	killFileCacheMux    sync.RWMutex
+	lastKillFileInfo  *RemoteFileInfo
+	lastKillFilePath  string
+	lastKillFileCheck time.Time
+	killFileCacheTTL  = 2 * time.Second // Reduced from 5s to 2s for faster detection
+	killFileCacheMux  sync.RWMutex
 )
 
 // Remote Log Processing for kill feed - Using unified connection system
@@ -894,7 +933,7 @@ func parseKillLog(line string) *KillInfo {
 }
 
 // Send kill log to Discord
-func sendKillLog(killInfo *KillInfo) error {
+func sendKillLog(killInfo *KillInfo) (err error) {
 	if killInfo == nil || Config.KillChannelID == "" {
 		return nil
 	}
@@ -902,6 +941,12 @@ func sendKillLog(killInfo *KillInfo) error {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Printf("⚠ [SEND KILL LOG] Panic recovered: %v", r)
+		}
+	}()
+
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("panic sending kill log: %v", r)
 		}
 	}()
 
@@ -1030,8 +1075,11 @@ func sendKillLog(killInfo *KillInfo) error {
 	}
 
 	// Send message with retry
-	var err error
+	releaseSendSlot := acquireKillFeedSendSlot()
+	defer releaseSendSlot()
+
 	for attempt := 0; attempt < 3; attempt++ {
+		resetMessageFileReaders(messageData)
 		_, err = SharedSession.ChannelMessageSendComplex(Config.KillChannelID, messageData)
 		if err == nil {
 			break
@@ -1441,7 +1489,7 @@ func setWeaponCommand(s *discordgo.Session, m *discordgo.MessageCreate) {
 		// Example: "Weapon M16A4" M16A4.png
 		//          0123456789...
 		closingQuotePos := strings.Index(content[1:], "\"") + 1 // +1 to get position in original string
-		if closingQuotePos == 0 { // Index returned -1, so -1+1=0
+		if closingQuotePos == 0 {                               // Index returned -1, so -1+1=0
 			s.ChannelMessageSend(m.ChannelID, "❌ รูปแบบไม่ถูกต้อง กรุณาปิด quote ให้ครบ\nตัวอย่าง: `!setweapon \"M1 Garand\" m1_garand.png`")
 			return
 		}

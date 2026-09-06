@@ -1,3 +1,7 @@
+// Allow X.509 certificates with negative serial numbers (RFC 5280 violation,
+// but commonly used by self-signed certs on some FTPS hosts).
+//go:debug x509negativeserial=1
+
 package main
 
 import (

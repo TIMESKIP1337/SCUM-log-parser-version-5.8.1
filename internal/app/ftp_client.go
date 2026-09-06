@@ -177,10 +177,12 @@ func createNewFTPConnection() (*ftp.ServerConn, error) {
 	var conn *ftp.ServerConn
 	var err error
 
+	// Per-connection TLS session cache (FTPS data connection session resumption)
 	tlsConfig := &tls.Config{
 		InsecureSkipVerify: true,
 		ServerName:         Config.FTPHost,
 		MinVersion:         tls.VersionTLS12,
+		ClientSessionCache: tls.NewLRUClientSessionCache(4),
 	}
 
 	if forceTLS {
